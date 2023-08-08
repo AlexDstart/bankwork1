@@ -18,39 +18,39 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
 public class AdminSecurityFilter extends OncePerRequestFilter {
-  private final String adminToken;
+    private final String adminToken;
 
-  public AdminSecurityFilter(@Value("${app.security.admin-token}") String adminToken) {
-    this.adminToken = adminToken;
-  }
+    public AdminSecurityFilter(@Value("${app.security.admin-token}") String adminToken) {
+        this.adminToken = adminToken;
+    }
 
-  @Override
-  protected void doFilterInternal(
-      @NonNull HttpServletRequest request,
-      @NonNull HttpServletResponse response,
-      @NonNull FilterChain filterChain)
-      throws ServletException, IOException {
-    Optional<UsernamePasswordAuthenticationToken> authenticatedUserDetails =
-        authenticateByKeyHeader(request);
-    authenticatedUserDetails.ifPresent(
-        details -> {
-          SecurityContext context = SecurityContextHolder.createEmptyContext();
-          context.setAuthentication(details);
-          SecurityContextHolder.setContext(context);
-        });
-    filterChain.doFilter(request, response);
-  }
+    @Override
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain)
+            throws ServletException, IOException {
+        Optional<UsernamePasswordAuthenticationToken> authenticatedUserDetails =
+                authenticateByKeyHeader(request);
+        authenticatedUserDetails.ifPresent(
+                details -> {
+                    SecurityContext context = SecurityContextHolder.createEmptyContext();
+                    context.setAuthentication(details);
+                    SecurityContextHolder.setContext(context);
+                });
+        filterChain.doFilter(request, response);
+    }
 
-  private Optional<UsernamePasswordAuthenticationToken> authenticateByKeyHeader(
-      HttpServletRequest request) {
-    return Optional.ofNullable(request.getHeader("X-SECURITY-ADMIN-KEY"))
-        .filter(StringUtils::hasText)
-        .filter(token -> token.contentEquals(adminToken))
-        .map(
-            stringKey -> {
-              BankingUserDetails userDetails = new BankingUserDetails(-1, "admin", "****", true);
-              return UsernamePasswordAuthenticationToken.authenticated(
-                  userDetails, "admin", userDetails.getAuthorities());
-            });
-  }
+    private Optional<UsernamePasswordAuthenticationToken> authenticateByKeyHeader(
+            HttpServletRequest request) {
+        return Optional.ofNullable(request.getHeader("X-SECURITY-ADMIN-KEY"))
+                .filter(StringUtils::hasText)
+                .filter(token -> token.contentEquals(adminToken))
+                .map(
+                        stringKey -> {
+                            BankingUserDetails userDetails = new BankingUserDetails(-1, "admin", "****", true);
+                            return UsernamePasswordAuthenticationToken.authenticated(
+                                    userDetails, "admin", userDetails.getAuthorities());
+                        });
+    }
 }

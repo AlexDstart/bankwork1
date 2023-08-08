@@ -38,17 +38,17 @@ public class AccountService {
   @Transactional(readOnly = true)
   public AccountDTO getAccount(long userId, Long accountId) {
     return accountRepository
-        .getAccountByUser_IdAndId(userId, accountId)
-        .map(AccountDTO::from)
-        .orElseThrow(AccountNotFoundException::new);
+            .getAccountByUser_IdAndId(userId, accountId)
+            .map(AccountDTO::from)
+            .orElseThrow(AccountNotFoundException::new);
   }
 
   @Transactional
   public void validateCurrency(long sourceAccount, long destinationAccount) {
     Account acc1 =
-        accountRepository.findById(sourceAccount).orElseThrow(AccountNotFoundException::new);
+            accountRepository.findById(sourceAccount).orElseThrow(AccountNotFoundException::new);
     Account acc2 =
-        accountRepository.findById(destinationAccount).orElseThrow(AccountNotFoundException::new);
+            accountRepository.findById(destinationAccount).orElseThrow(AccountNotFoundException::new);
     if (!acc1.getAccountCurrency().equals(acc2.getAccountCurrency())){
       throw new WrongCurrencyException();
     }
@@ -60,9 +60,9 @@ public class AccountService {
       throw new InvalidAmountException();
     }
     Account account =
-        accountRepository
-            .getAccountByUser_IdAndId(userId, accountId)
-            .orElseThrow(AccountNotFoundException::new);
+            accountRepository
+                    .getAccountByUser_IdAndId(userId, accountId)
+                    .orElseThrow(AccountNotFoundException::new);
     account.setAmount(account.getAmount() + amount);
     return AccountDTO.from(account);
   }
@@ -73,12 +73,12 @@ public class AccountService {
       throw new InvalidAmountException();
     }
     Account account =
-        accountRepository
-            .getAccountByUser_IdAndId(id, accountId)
-            .orElseThrow(AccountNotFoundException::new);
+            accountRepository
+                    .getAccountByUser_IdAndId(id, accountId)
+                    .orElseThrow(AccountNotFoundException::new);
     if (account.getAmount() < amount) {
       throw new InsufficientFundsException(
-          "Cannot withdraw " + amount + " " + account.getAccountCurrency().name());
+              "Cannot withdraw " + amount + " " + account.getAccountCurrency().name());
     }
     account.setAmount(account.getAmount() - amount);
     return AccountDTO.from(account);

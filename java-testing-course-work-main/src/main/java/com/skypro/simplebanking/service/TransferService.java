@@ -16,12 +16,12 @@ public class TransferService {
   @Transactional
   public void transfer(long id, @RequestBody TransferRequest transferRequest) {
     accountService.validateCurrency(
-        transferRequest.getFromAccountId(), transferRequest.getToAccountId());
+            transferRequest.getFromAccountId(), transferRequest.getToAccountId());
     accountService.withdrawFromAccount(
-        id, transferRequest.getFromAccountId(), transferRequest.getAmount());
+            id, transferRequest.getFromAccountId(), transferRequest.getAmount());
     accountService.depositToAccount(
-        transferRequest.getToUserId(),
-        transferRequest.getToAccountId(),
-        transferRequest.getAmount());
+            transferRequest.getToUserId(),
+            transferRequest.getToAccountId(),
+            transferRequest.getAmount());
   }
 }

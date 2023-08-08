@@ -20,7 +20,7 @@ public class TransferController {
 
   @PostMapping
   public void transfer(
-      Authentication authentication, @RequestBody TransferRequest transferRequest) {
+          Authentication authentication, @RequestBody TransferRequest transferRequest) {
     BankingUserDetails bankingUserDetails = (BankingUserDetails) authentication.getPrincipal();
     transferService.transfer(bankingUserDetails.getId(), transferRequest);
   }
