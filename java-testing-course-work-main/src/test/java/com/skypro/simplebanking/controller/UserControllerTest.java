@@ -2,24 +2,24 @@ package com.skypro.simplebanking.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skypro.simplebanking.IntegrationTestBase;
-import com.skypro.simplebanking.dto.BankingUserDetails;
 import com.skypro.simplebanking.dto.CreateUserRequest;
 import com.skypro.simplebanking.entity.User;
 import com.skypro.simplebanking.repository.UserRepository;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.Base64Utils;
 
 import java.util.ArrayList;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 
 class UserControllerTest extends IntegrationTestBase {
 
@@ -34,6 +34,10 @@ class UserControllerTest extends IntegrationTestBase {
     @Autowired
     ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearAll() {
+        userRepository.deleteAll();
+    }
 
     @DisplayName("Создание пользователя администратором успешно")
     @Test
@@ -43,10 +47,10 @@ class UserControllerTest extends IntegrationTestBase {
         createUserRequest.setUsername("NewUser");
         createUserRequest.setPassword("password");
 
-        String jsonUserRequest = new ObjectMapper().writeValueAsString(createUserRequest);
+        String jsonUserRequest = objectMapper.writeValueAsString(createUserRequest);
 
         mockMvc.perform(post(USER_ENDPOINT, createUserRequest)
-                        .with(user("user_admin").roles("ADMIN"))
+                        .header(ADMIN_HEADER, ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonUserRequest))
                 .andExpect(status().isOk())
@@ -60,30 +64,40 @@ class UserControllerTest extends IntegrationTestBase {
     @Test
     @SneakyThrows
     void whenUserCreateUserIsNotSuccess() {
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
+        userRepository.save(user);
         CreateUserRequest createUserRequest = new CreateUserRequest();
         createUserRequest.setUsername("NewUser");
         createUserRequest.setPassword("password");
 
-        String jsonUserRequest = new ObjectMapper().writeValueAsString(createUserRequest);
+        String jsonUserRequest = objectMapper.writeValueAsString(createUserRequest);
 
         mockMvc.perform(post(USER_ENDPOINT, createUserRequest)
-                        .with(user("test_user").roles("USER"))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonUserRequest))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 
     @DisplayName("Пользователь получает список всех пользователей успешно")
     @Test
     @SneakyThrows
     void whenUserGetAllUsersIsSuccess() {
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
+        userRepository.save(user);
         userRepository.save(new User("firstUser", "2236", new ArrayList<>()));
         userRepository.save(new User("secondUser", "2236", new ArrayList<>()));
 
         mockMvc.perform(get(USER_ENDPOINT + PATH_GET_ALL_USERS)
-                        .with(user("test_user").roles("USER")))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isNotEmpty());
+                .andExpect(jsonPath("$").isNotEmpty())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$.[0].username").value("test_user"))
+                .andExpect(jsonPath("$.[1].username").value("firstUser"))
+                .andExpect(jsonPath("$.[2].username").value("secondUser"));
     }
 
     @DisplayName("Администратор получает список всех пользователей не успешно")
@@ -94,20 +108,20 @@ class UserControllerTest extends IntegrationTestBase {
         userRepository.save(new User("secondUser", "2236", new ArrayList<>()));
 
         mockMvc.perform(get(USER_ENDPOINT + PATH_GET_ALL_USERS)
-                        .with(user("admin").roles("ADMIN")))
-                .andExpect(status().is4xxClientError());
+                        .header(ADMIN_HEADER, ADMIN_TOKEN))
+                .andExpect(status().isForbidden());
     }
 
     @DisplayName("Пользователь получает свой профиль успешно")
     @Test
     @SneakyThrows
     void whenUserGetProfileIsSuccess() {
-        User user = new User("test_user", "2236", new ArrayList<>());
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_user", "2236", false);
 
         mockMvc.perform(get(USER_ENDPOINT + PATH_GET_MY_PROFILE)
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(user.getId()))
@@ -119,9 +133,9 @@ class UserControllerTest extends IntegrationTestBase {
     @SneakyThrows
     void whenAdminGetProfileIsNotSuccess() {
         mockMvc.perform(get(USER_ENDPOINT + PATH_GET_MY_PROFILE)
-                        .with(user("admin").roles("ADMIN"))
+                        .header(ADMIN_HEADER, ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 
 }

@@ -3,19 +3,20 @@ package com.skypro.simplebanking.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skypro.simplebanking.IntegrationTestBase;
 import com.skypro.simplebanking.dto.BalanceChangeRequest;
-import com.skypro.simplebanking.dto.BankingUserDetails;
 import com.skypro.simplebanking.entity.Account;
 import com.skypro.simplebanking.entity.AccountCurrency;
 import com.skypro.simplebanking.entity.User;
 import com.skypro.simplebanking.repository.AccountRepository;
 import com.skypro.simplebanking.repository.UserRepository;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.Base64Utils;
 
 import java.util.ArrayList;
 
@@ -25,7 +26,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class AccountControllerTest extends IntegrationTestBase {
-
     private static final String ACCOUNT_ENDPOINT = "/account/";
     private static final String PATH_DEPOSIT_TO_ACCOUNT = "deposit/{id}";
     private static final String PATH_WITHDRAW_FROM_ACCOUNT = "withdraw/{id}";
@@ -39,23 +39,27 @@ class AccountControllerTest extends IntegrationTestBase {
     @Autowired
     ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearAll() {
+        userRepository.deleteAll();
+        accountRepository.deleteAll();
+    }
+
     @DisplayName("Пользователь получает свой аккаунт успешно")
     @Test
     @SneakyThrows
     void whenUserGetUserAccountIsSuccess() {
-        User user = new User("test_user", "2236", new ArrayList<>());
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
-
         Account account = new Account();
         account.setAccountCurrency(AccountCurrency.RUB);
         account.setAmount(10000L);
         account.setUser(user);
         accountRepository.save(account);
 
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_user", "2236", false);
-
         mockMvc.perform(get(ACCOUNT_ENDPOINT + "{id}", account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(account.getId()))
@@ -67,7 +71,7 @@ class AccountControllerTest extends IntegrationTestBase {
     @Test
     @SneakyThrows
     void whenAdminGetUserAccountIsNotSuccess() {
-        User user = new User("test_admin", "2236", new ArrayList<>());
+        User user = new User("test_admin", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
 
         Account account = new Account();
@@ -76,19 +80,17 @@ class AccountControllerTest extends IntegrationTestBase {
         account.setUser(user);
         accountRepository.save(account);
 
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_admin", "2236", true);
-
         mockMvc.perform(get(ACCOUNT_ENDPOINT + "{id}", account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(ADMIN_HEADER, ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 
     @DisplayName("Зачисление пользователем на счет пользователя успешно")
     @Test
     @SneakyThrows
     void whenUserDepositToAccountIsSuccess() {
-        User user = new User("test_user", "2236", new ArrayList<>());
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
 
         Account account = new Account();
@@ -100,11 +102,11 @@ class AccountControllerTest extends IntegrationTestBase {
         BalanceChangeRequest balanceChangeRequest = new BalanceChangeRequest();
         balanceChangeRequest.setAmount(5000L);
 
-        String jsonBalanceChangeRequest = new ObjectMapper().writeValueAsString(balanceChangeRequest);
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_user", "2236", false);
+        String jsonBalanceChangeRequest = objectMapper.writeValueAsString(balanceChangeRequest);
 
         mockMvc.perform(post(ACCOUNT_ENDPOINT + PATH_DEPOSIT_TO_ACCOUNT, account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonBalanceChangeRequest))
                 .andExpect(status().isOk())
@@ -117,7 +119,7 @@ class AccountControllerTest extends IntegrationTestBase {
     @Test
     @SneakyThrows
     void whenAdminDepositToAccountIsNotSuccess() {
-        User user = new User("test_admin", "2236", new ArrayList<>());
+        User user = new User("test_admin", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
 
         Account account = new Account();
@@ -129,21 +131,20 @@ class AccountControllerTest extends IntegrationTestBase {
         BalanceChangeRequest balanceChangeRequest = new BalanceChangeRequest();
         balanceChangeRequest.setAmount(5000L);
 
-        String jsonBalanceChangeRequest = new ObjectMapper().writeValueAsString(balanceChangeRequest);
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_admin", "2236", true);
+        String jsonBalanceChangeRequest = objectMapper.writeValueAsString(balanceChangeRequest);
 
         mockMvc.perform(post(ACCOUNT_ENDPOINT + PATH_DEPOSIT_TO_ACCOUNT, account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(ADMIN_HEADER, ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonBalanceChangeRequest))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 
     @DisplayName("Снятие пользователем средств со счета пользователя успешно")
     @Test
     @SneakyThrows
     void whenUserWithdrawFromAccountIsSuccess() {
-        User user = new User("test_user", "2236", new ArrayList<>());
+        User user = new User("test_user", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
 
         Account account = new Account();
@@ -155,11 +156,11 @@ class AccountControllerTest extends IntegrationTestBase {
         BalanceChangeRequest balanceChangeRequest = new BalanceChangeRequest();
         balanceChangeRequest.setAmount(5000L);
 
-        String jsonBalanceChangeRequest = new ObjectMapper().writeValueAsString(balanceChangeRequest);
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_user", "2236", false);
+        String jsonBalanceChangeRequest = objectMapper.writeValueAsString(balanceChangeRequest);
 
         mockMvc.perform(post(ACCOUNT_ENDPOINT + PATH_WITHDRAW_FROM_ACCOUNT, account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(USER_CREDENTIALS.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonBalanceChangeRequest))
                 .andExpect(status().isOk())
@@ -172,7 +173,7 @@ class AccountControllerTest extends IntegrationTestBase {
     @Test
     @SneakyThrows
     void whenAdminWithdrawFromAccountIsNotSuccess() {
-        User user = new User("test_admin", "2236", new ArrayList<>());
+        User user = new User("test_admin", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(user);
 
         Account account = new Account();
@@ -184,14 +185,13 @@ class AccountControllerTest extends IntegrationTestBase {
         BalanceChangeRequest balanceChangeRequest = new BalanceChangeRequest();
         balanceChangeRequest.setAmount(5000L);
 
-        String jsonBalanceChangeRequest = new ObjectMapper().writeValueAsString(balanceChangeRequest);
-        BankingUserDetails userDetails = new BankingUserDetails(user.getId(), "test_admin", "2236", true);
+        String jsonBalanceChangeRequest = objectMapper.writeValueAsString(balanceChangeRequest);
 
         mockMvc.perform(post(ACCOUNT_ENDPOINT + PATH_WITHDRAW_FROM_ACCOUNT, account.getId())
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(ADMIN_HEADER, ADMIN_TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonBalanceChangeRequest))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 
 }

@@ -2,7 +2,6 @@ package com.skypro.simplebanking.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.skypro.simplebanking.IntegrationTestBase;
-import com.skypro.simplebanking.dto.BankingUserDetails;
 import com.skypro.simplebanking.dto.TransferRequest;
 import com.skypro.simplebanking.entity.Account;
 import com.skypro.simplebanking.entity.AccountCurrency;
@@ -10,21 +9,23 @@ import com.skypro.simplebanking.entity.User;
 import com.skypro.simplebanking.repository.AccountRepository;
 import com.skypro.simplebanking.repository.UserRepository;
 import lombok.SneakyThrows;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.util.Base64Utils;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.*;
 
 class TransferControllerTest extends IntegrationTestBase {
-
     private static final String TRANSFER_ENDPOINT = "/transfer/";
 
     @Autowired
@@ -36,14 +37,23 @@ class TransferControllerTest extends IntegrationTestBase {
     @Autowired
     ObjectMapper objectMapper;
 
+    @AfterEach
+    void clearAll() {
+        userRepository.deleteAll();
+        accountRepository.deleteAll();
+    }
+
     @DisplayName("Перевод одного пользователя другому успешен")
     @Test
     @SneakyThrows
     void whenUserTransferAnotherUserIsSuccess() {
+        String userCredentials = "firstUser:2236";
+        Long firstExpectedBalance = 8000L;
+        Long secondExpectedBalance = 7000L;
         Account firstUserAccount = new Account();
         Account secondUserAccount = new Account();
-        User firstUser = new User("firstUser", "2236", new ArrayList<>());
-        User secondUser = new User("secondUser", "2236", new ArrayList<>());
+        User firstUser = new User("firstUser", HASHED_PASSWORD, new ArrayList<>());
+        User secondUser = new User("secondUser", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(firstUser);
         userRepository.save(secondUser);
 
@@ -65,25 +75,34 @@ class TransferControllerTest extends IntegrationTestBase {
         transferRequest.setToUserId(secondUser.getId());
         transferRequest.setAmount(2000L);
 
-        BankingUserDetails userDetails = new BankingUserDetails(firstUser.getId(), "firstUser", "2236", false);
-
-        String jsonTransferRequest = new ObjectMapper().writeValueAsString(transferRequest);
+        String jsonTransferRequest = objectMapper.writeValueAsString(transferRequest);
 
         mockMvc.perform(post(TRANSFER_ENDPOINT, transferRequest)
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(HttpHeaders.AUTHORIZATION,
+                                "Basic " + Base64Utils.encodeToString(userCredentials.getBytes()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonTransferRequest))
                 .andExpect(status().isOk());
+
+        Account firstUserAccountAfterTransfer = accountRepository.findById(firstUserAccount.getId()).get();
+        Account secondUserAccountAfterTransfer = accountRepository.findById(secondUserAccount.getId()).get();
+        Long actualFirstBalance = firstUserAccountAfterTransfer.getAmount();
+        Long actualSecondBalance = secondUserAccountAfterTransfer.getAmount();
+
+        assertThat(actualFirstBalance).isEqualTo(firstExpectedBalance);
+        assertThat(actualSecondBalance).isEqualTo(secondExpectedBalance);
     }
 
     @DisplayName("Перевод от имени администратора одного пользователя другому не успешен")
     @Test
     @SneakyThrows
     void whenAdminTransferAnotherUserIsNotSuccess() {
+        String adminToken = "SUPER_SECRET_KEY_FROM_ADMIN";
+        String adminHeader = "X-SECURITY-ADMIN-KEY";
         Account firstUserAccount = new Account();
         Account secondUserAccount = new Account();
-        User firstUser = new User("firstUser", "2236", new ArrayList<>());
-        User secondUser = new User("secondUser", "2236", new ArrayList<>());
+        User firstUser = new User("firstUser", HASHED_PASSWORD, new ArrayList<>());
+        User secondUser = new User("secondUser", HASHED_PASSWORD, new ArrayList<>());
         userRepository.save(firstUser);
         userRepository.save(secondUser);
 
@@ -105,14 +124,12 @@ class TransferControllerTest extends IntegrationTestBase {
         transferRequest.setToUserId(secondUser.getId());
         transferRequest.setAmount(2000L);
 
-        BankingUserDetails userDetails = new BankingUserDetails(firstUser.getId(), "firstUser", "2236", true);
-
-        String jsonTransferRequest = new ObjectMapper().writeValueAsString(transferRequest);
+        String jsonTransferRequest = objectMapper.writeValueAsString(transferRequest);
 
         mockMvc.perform(post(TRANSFER_ENDPOINT, transferRequest)
-                        .with(SecurityMockMvcRequestPostProcessors.user(userDetails))
+                        .header(adminHeader, adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonTransferRequest))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isForbidden());
     }
 }

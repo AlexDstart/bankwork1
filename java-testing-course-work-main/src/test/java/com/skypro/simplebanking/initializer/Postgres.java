@@ -5,15 +5,11 @@ import org.springframework.boot.test.util.TestPropertyValues;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 @UtilityClass
-@Testcontainers
 public class Postgres {
-    private static final String DATABASE_NAME = "test_banking";
+    private static final String DATABASE_NAME = "banking";
 
-    @Container
     public static final PostgreSQLContainer<?> container = new PostgreSQLContainer<>("postgres:15.3")
             .withDatabaseName(DATABASE_NAME);
 
