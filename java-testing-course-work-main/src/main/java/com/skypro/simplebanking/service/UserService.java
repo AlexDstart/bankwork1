@@ -23,9 +23,9 @@ public class UserService implements UserDetailsService {
   private final PasswordEncoder passwordEncoder;
 
   public UserService(
-      UserRepository userRepository,
-      AccountService accountService,
-      PasswordEncoder passwordEncoder) {
+          UserRepository userRepository,
+          AccountService accountService,
+          PasswordEncoder passwordEncoder) {
     this.userRepository = userRepository;
     this.accountService = accountService;
     this.passwordEncoder = passwordEncoder;
@@ -35,9 +35,9 @@ public class UserService implements UserDetailsService {
   @Transactional(readOnly = true)
   public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
     return userRepository
-        .findByUsername(username)
-        .map(BankingUserDetails::from)
-        .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+            .findByUsername(username)
+            .map(BankingUserDetails::from)
+            .orElseThrow(() -> new UsernameNotFoundException("User not found"));
   }
 
   @Transactional
